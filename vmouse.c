@@ -75,47 +75,56 @@ int send_msg(struct socket *sock, struct sockaddr_in *cl, char *buf, int len)
 	return size;
 }
 
-static int handle_mouse_movements(unsigned char *buf, const size_t len)
+static void handle_mouse_event(unsigned char *buf, const size_t len)
 {
 	pr_info("got mouse request\n");
 
 	typedef struct
 	{
 		char type;
-		union
-		{
-			int rel_x;
-			int rel_y;
-		};
 
 		union
 		{
-			int btn;
-			bool on;
+			// type == movement
+			struct 
+			{
+				int rel_x;
+				int rel_y;
+			};
+
+			// type == click
+			struct
+			{
+				short btn;
+				char on;
+			};
 		};
+
 	} __packed MouseRequest;
 
 	MouseRequest *req = buf;
 
-	pr_info("type %c rel_x %d rel_y %d\n", req->type, req->rel_x, req->rel_y);
-
 	switch(req->type)
 	{
-	case 'M': // movement
+	case 'M': // movemernt
+		pr_info("type %c rel_x %d rel_y %d\n", req->type, req->rel_x, req->rel_y);
 		input_report_rel(mouse_dev, REL_X, req->rel_x);
 		input_report_rel(mouse_dev, REL_X, req->rel_y);
 		break;
 
 	case 'C': // click
-		// input_report_key(mouse_dev, )
+		pr_info("type %c btn %x on %d\n", req->type, req->btn, req->on);
+		if(req->btn == BTN_LEFT || req->btn == BTN_RIGHT)
+		{
+			input_report_key(mouse_dev, req->btn, req->on);
+		}
+		break;
 
 	default:
 		pr_warn("got unknown type: %c\n", req->type);
 	}
 
 	input_sync(mouse_dev);
-
-	return 0;
 }
 
 int start_listen(void)
@@ -154,7 +163,7 @@ int start_listen(void)
 		{
 			return -1;
 		}
-		handle_mouse_movements(buf, len);
+		handle_mouse_event(buf, len);
 		// send_msg(svc->listen_socket, &client, buf, size);
 	}
 
